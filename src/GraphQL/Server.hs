@@ -55,14 +55,14 @@ runHandlerT = runReaderT . unHandlerT
 
 data ArgDef a = ArgDef G.InputValueDefinition deriving (Eq, Show)
 
-type Args a = ApErr GraphQLError ArgDef a
+type Args a = ApM ArgDef (Either GraphQLError) a
 
 -- TODO make sure to filter out args not defined with a local on the HandlerEnv
 interpret :: Args a -> (G.ArgumentsDefinition, HandlerT m a)
 interpret = undefined
 
 baseArg :: G.Name -> G.Type -> Args G.Value
-baseArg name ty = liftApErr $ ArgDef $ G.InputValueDefinition name ty Nothing
+baseArg name ty = liftApM $ ArgDef $ G.InputValueDefinition name ty Nothing
 
 stringTy :: G.Type
 stringTy = G.TypeNamed $ G.NamedType "String"
@@ -79,7 +79,7 @@ projectInt _ (G.ValueInt i) = Right i
 projectInt name value = Left $ BadArgTypeError name intTy value
 
 stringArg :: G.Name -> Args Text
-stringArg name = tryApErr (baseArg name stringTy) (projectString name)
+stringArg name = bindApM (baseArg name stringTy) (projectString name)
 
 intArg :: G.Name -> Args Int32
-intArg name = tryApErr (baseArg name intTy) (projectInt name)
+intArg name = bindApM (baseArg name intTy) (projectInt name)

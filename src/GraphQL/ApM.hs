@@ -1,48 +1,48 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE Rank2Types #-}
 
-module GraphQL.ApM where
+module GraphQL.ApM
+  ( ApM(..)
+  , liftApM
+  , bindApM
+  , runApM
+  ) where
 
 import Control.Monad (join)
 
-data ApErr e f a where
-  PureErr :: Either e a -> ApErr e f a
-  ApErr   :: f a -> ApErr e f (a -> Either e b) -> ApErr e f b
-  FlatErr :: ApErr e f (Either e a) -> ApErr e f a
+data ApM f g a where
+  Pure :: g a -> ApM f g a
+  Ap   :: f a -> ApM f g (a -> g b) -> ApM f g b
+  Flat :: ApM f g (g a) -> ApM f g a
 
-instance Functor (ApErr e f) where
-  fmap f (PureErr ea) = PureErr (fmap f ea)
-  fmap f (ApErr x y) = ApErr x (fmap ((fmap f) .) y)
-  fmap f (FlatErr x) = FlatErr (fmap (fmap f) x)
+instance Functor g => Functor (ApM f g) where
+  fmap f (Pure ga) = Pure (f <$> ga)
+  fmap f (Ap x y)  = Ap x (fmap ((fmap f) .) y)
 
-conv :: Either e (a -> b) -> a -> Either e b
-conv (Left e) _ = Left e
-conv (Right f) a = Right (f a)
+conv :: Applicative g => g (a -> b) -> a -> g b
+conv gf a = gf <*> pure a
 
-convJoin :: Either e (a -> Either e b) -> a -> Either e b
-convJoin (Left e) _ = Left e
-convJoin (Right f) a = f a
+instance Applicative g => Applicative (ApM f g) where
+  pure = Pure . pure
+  Pure gf <*> Pure a = Pure (gf <*> a)
+  Pure gf <*> Flat x = Flat (fmap (gf <*>) x)
+  Pure gf <*> Ap x y = Ap x (fmap (\zToA -> \z -> gf <*> (zToA z)) y)
+  Flat x <*> y = Flat ((conv <$> x) <*> y)
+  Ap x y <*> z = Ap x (flip <$> (fmap (fmap conv) y) <*> z)
 
-instance Applicative (ApErr e f) where
-  pure = PureErr . Right
-  PureErr (Right f) <*> y = f <$> y
-  PureErr (Left e) <*> _ = PureErr (Left e)
-  FlatErr x <*> y = FlatErr ((conv <$> x) <*> y)
-  ApErr x y <*> z = ApErr x (flip <$> (fmap (fmap conv) y) <*> z)
+liftApM :: Applicative g => f a -> ApM f g a
+liftApM x = Ap x (Pure . pure $ pure)
 
-liftApErr :: f a -> ApErr e f a
-liftApErr x = ApErr x (PureErr . Right $ Right)
+bindApM :: Functor g => ApM f g a -> (a -> g b) -> ApM f g b
+bindApM x f = Flat (f <$> x)
 
-throwApErr :: Either e a -> ApErr e f a
-throwApErr = PureErr
+joining :: (Monad h, Applicative g) => (forall x. g (h x) -> h x) -> h (g x) -> h x
+joining transGH = join . (fmap (transGH . fmap return))
 
-tryApErr :: ApErr e f a -> (a -> Either e b) -> ApErr e f b
-tryApErr x f = FlatErr (f <$> x)
-
-runApErr :: Applicative g => (forall x. f x -> g x) -> ApErr e f a -> g (Either e a)
-runApErr _ (PureErr ea) = pure ea
-runApErr trans (FlatErr under) = join <$> runApErr trans under
-runApErr trans (ApErr x y) = 
-  let y' = convJoin <$> runApErr trans y
-      x' = trans x
-  in y' <*> x'
+runApM :: (Monad h, Applicative g) => (forall x. f x -> h x) -> (forall x. g (h x) -> h x) -> ApM f g a -> h a
+runApM _ transGH (Pure ga) = transGH (fmap return ga)
+runApM transFH transGH (Flat under) = joining transGH $ runApM transFH transGH under
+runApM transFH transGH (Ap x y) = 
+  let y' = runApM transFH transGH y
+      x' = transFH x
+  in joining transGH $ y' <*> x'

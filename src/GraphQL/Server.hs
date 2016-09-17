@@ -12,6 +12,7 @@ import Control.Lens
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Reader
+import Control.Monad.Writer
 import Data.Int
 import qualified Data.Text as T
 import Data.Text (Text)
@@ -111,10 +112,42 @@ restrictTo args act = act
 interpret :: MonadThrow m => Args a -> HandlerT m a
 interpret = runAp lookupArg
 
--- TODO make sure to filter out args not defined with a local on the HandlerEnv
-handle :: MonadThrow m => Args a -> (a -> HandlerT m b) -> HandlerT m b
-handle args makeBody = do
+makeHandler :: MonadThrow m => Args a -> (a -> HandlerT m b) -> HandlerT m b
+makeHandler args makeBody = do
   let defs = argDefs args
   parsed <- interpret args
   let body = makeBody parsed
   restrictTo defs body
+
+data FieldDecl m = FieldDecl
+  { _fieldDeclField :: G.FieldDefinition
+  , _fieldDeclHandler :: HandlerT m G.Value
+  }
+
+newtype FieldDeclT m a = FieldDeclT
+  { unFieldDeclT :: WriterT [FieldDecl m] m a 
+  } deriving (Functor, Applicative, Monad, MonadWriter [FieldDecl m], MonadThrow)
+
+instance MonadTrans FieldDeclT where
+  lift = FieldDeclT . lift
+
+instance Monad m => MonadBase m (FieldDeclT m) where
+  liftBase = lift
+
+runFieldDeclT :: Monad m => FieldDeclT m a -> m (a, [FieldDecl m])
+runFieldDeclT = runWriterT . unFieldDeclT
+
+declareField :: MonadThrow m => G.Name -> G.Type -> Args a -> (a -> HandlerT m G.Value) -> FieldDeclT m ()
+declareField name retTy args makeBody =
+  let defs = argDefs args
+      field = G.FieldDefinition name defs retTy
+      handler = makeHandler args makeBody
+      decl = FieldDecl field handler
+  in tell [decl]
+
+declareField0 :: Monad m => G.Name -> G.Type -> HandlerT m G.Value -> FieldDeclT m ()
+declareField0 name retTy body =
+  let field = G.FieldDefinition name [] retTy
+      handler = restrictTo [] body
+      decl = FieldDecl field handler
+  in tell [decl]

@@ -8,7 +8,6 @@ module GraphQL.Server where
 
 import qualified Data.GraphQL.AST as G
 import Control.Applicative.Free
-import Control.Lens
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Reader
@@ -151,3 +150,13 @@ declareField0 name retTy body =
       handler = restrictTo [] body
       decl = FieldDecl field handler
   in tell [decl]
+
+data ObjectDecl m = ObjectDecl
+  { _objectDeclName :: G.Name
+  , _objectDeclFieldDecls :: [FieldDecl m]
+  }
+
+declareObject :: Monad m => G.Name -> FieldDeclT m () -> m (ObjectDecl m)
+declareObject name declT = do
+  ((), fieldDecls) <- runFieldDeclT declT
+  return $ ObjectDecl name fieldDecls

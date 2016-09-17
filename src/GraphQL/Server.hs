@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -6,6 +7,7 @@
 module GraphQL.Server where
 
 import qualified Data.GraphQL.AST as G
+import Control.Applicative.Free
 import Control.Lens
 import Control.Monad.Base
 import Control.Monad.Catch
@@ -15,7 +17,6 @@ import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Typeable
 import GHC.Exception
-import GraphQL.ApM
 
 data Resource m = Resource
   { _resourceDef :: G.ObjectTypeDefinition
@@ -28,14 +29,14 @@ data Root m = Root
 
 data HandlerEnv m = HandlerEnv
   { _handlerEnvRoot :: Root m
-  , _handlerEnvArgs :: [(Text, G.Value)]
+  , _handlerEnvArgs :: [(G.Name, G.Value)]
   }
 
-data GraphQLError =
+data HandlerError =
     NoArgError G.Name
   | BadArgTypeError G.Name G.Type G.Value
   deriving (Eq, Show, Typeable)
-instance Exception GraphQLError
+instance Exception HandlerError
 
 newtype HandlerT m a = HandlerT
   { unHandlerT :: ReaderT (HandlerEnv m) m a
@@ -47,22 +48,12 @@ instance MonadTrans HandlerT where
 instance Monad m => MonadBase m (HandlerT m) where
   liftBase = lift
 
-lookupArg :: G.InputValueDefinition -> Handler m G.Value
-lookupArg = undefined
-
 runHandlerT :: Monad m =>  HandlerT m a -> HandlerEnv m -> m a
 runHandlerT = runReaderT . unHandlerT
 
-data ArgDef a = ArgDef G.InputValueDefinition deriving (Eq, Show)
-
-type Args a = ApM ArgDef (Either GraphQLError) a
-
--- TODO make sure to filter out args not defined with a local on the HandlerEnv
-interpret :: Args a -> (G.ArgumentsDefinition, HandlerT m a)
-interpret = undefined
-
-baseArg :: G.Name -> G.Type -> Args G.Value
-baseArg name ty = liftApM $ ArgDef $ G.InputValueDefinition name ty Nothing
+data ArgTy a where
+  StringArgTy :: ArgTy Text
+  IntArgTy :: ArgTy Int32
 
 stringTy :: G.Type
 stringTy = G.TypeNamed $ G.NamedType "String"
@@ -70,16 +61,60 @@ stringTy = G.TypeNamed $ G.NamedType "String"
 intTy :: G.Type
 intTy = G.TypeNamed $ G.NamedType "Int"
 
-projectString :: G.Name -> G.Value -> Either GraphQLError Text
-projectString _ (G.ValueString (G.StringValue t)) = Right t
-projectString name value = Left $ BadArgTypeError name stringTy value
+extTy :: ArgTy a -> G.Type
+extTy StringArgTy = stringTy
+extTy IntArgTy = intTy
 
-projectInt :: G.Name -> G.Value -> Either GraphQLError Int32
-projectInt _ (G.ValueInt i) = Right i
-projectInt name value = Left $ BadArgTypeError name intTy value
+data ArgDef a = ArgDef
+  { _argDefName :: G.Name
+  , _argDefDefault :: Maybe G.Value
+  , _argDefType :: ArgTy a
+  }
 
-stringArg :: G.Name -> Args Text
-stringArg name = bindApM (baseArg name stringTy) (projectString name)
+extDef :: ArgDef a -> G.InputValueDefinition
+extDef (ArgDef name def ty) = G.InputValueDefinition name (extTy ty) def
 
-intArg :: G.Name -> Args Int32
-intArg name = bindApM (baseArg name intTy) (projectInt name)
+type Args a = Ap ArgDef a
+
+argDefs :: Args a -> G.ArgumentsDefinition
+argDefs = runAp_ (return . extDef)
+
+projectString :: G.Value -> Maybe Text
+projectString (G.ValueString (G.StringValue t)) = Just t
+projectString _ = Nothing
+
+projectInt :: G.Value -> Maybe Int32
+projectInt (G.ValueInt i) = Just i
+projectInt _ = Nothing
+
+projectTy :: ArgTy a -> G.Value -> Maybe a
+projectTy argTy =
+  case argTy of
+    StringArgTy -> projectString
+    IntArgTy -> projectInt
+
+-- ~ natural transformation
+lookupArg :: MonadThrow m => ArgDef a -> HandlerT m a
+lookupArg (ArgDef name def argTy) = do
+  args <- asks _handlerEnvArgs
+  case lookup name args of
+    Nothing -> throwM $ NoArgError name
+    Just value ->
+      case projectTy argTy value of
+        Nothing -> throwM $ BadArgTypeError name (extTy argTy) value
+        Just parsed -> return parsed
+
+-- TODO actually restrict
+restrictTo :: G.ArgumentsDefinition -> HandlerT m a -> HandlerT m a
+restrictTo args act = act
+
+interpret :: MonadThrow m => Args a -> HandlerT m a
+interpret = runAp lookupArg
+
+-- TODO make sure to filter out args not defined with a local on the HandlerEnv
+handle :: MonadThrow m => Args a -> (a -> HandlerT m b) -> HandlerT m b
+handle args makeBody = do
+  let defs = argDefs args
+  parsed <- interpret args
+  let body = makeBody parsed
+  restrictTo defs body

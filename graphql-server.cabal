@@ -15,10 +15,10 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     GraphQL.ApM
-                     , GraphQL.Server
+  exposed-modules:     GraphQL.Server
   build-depends:       base >= 4.9 && < 5
                      , exceptions
+                     , free
                      , graphql
                      , lens
                      , mtl

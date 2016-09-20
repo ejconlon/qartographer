@@ -20,15 +20,11 @@ import Data.Text (Text)
 import Data.Typeable
 import GHC.Exception
 
--- newtype Validation e a = Validation {
---   unValidation :: Either e a
--- } deriving (Show, Eq, Functor, Foldable, Traversable)
-
 newtype Validation e a = Validation {
   runValidation :: Either e a
 } deriving (Functor)
 
-instance Semigroup e => Applicative (Validation e ) where
+instance Semigroup e => Applicative (Validation e) where
   pure = Validation . Right
   (Validation x) <*> (Validation y) = Validation (z x y)
     where
@@ -40,19 +36,9 @@ instance Semigroup e => Applicative (Validation e ) where
 invalid :: e -> Validation e a
 invalid = Validation . Left
 
-data Resource m = Resource
-  { _resourceDef :: G.ObjectTypeDefinition
-  , _resourceResolve :: G.Name -> Root m -> m G.Value
-  }
-
-data Root m = Root
-  { _rootResource :: G.Name -> m (Resource m)
-  }
-
-data HandlerEnv m = HandlerEnv
-  { _handlerEnvRoot :: Root m
-  , _handlerEnvArgs :: [(G.Name, G.Value)]
-  -- , _handlerSelSet  :: G.SelectionSet
+data HandlerEnv = HandlerEnv
+  { _handlerEnvArgs :: [(G.Name, G.Value)]
+  , _handlerSelSet  :: G.SelectionSet
   }
 
 data HandlerError =
@@ -62,8 +48,8 @@ data HandlerError =
 instance Exception HandlerError
 
 newtype HandlerT m a = HandlerT
-  { unHandlerT :: ReaderT (HandlerEnv m) m a
-  } deriving (Functor, Applicative, Monad, MonadReader (HandlerEnv m), MonadThrow)
+  { unHandlerT :: ReaderT HandlerEnv m a
+  } deriving (Functor, Applicative, Monad, MonadReader HandlerEnv, MonadThrow)
 
 instance MonadTrans HandlerT where
   lift = HandlerT . lift
@@ -71,7 +57,7 @@ instance MonadTrans HandlerT where
 instance Monad m => MonadBase m (HandlerT m) where
   liftBase = lift
 
-runHandlerT :: Monad m =>  HandlerT m a -> HandlerEnv m -> m a
+runHandlerT :: Monad m =>  HandlerT m a -> HandlerEnv -> m a
 runHandlerT = runReaderT . unHandlerT
 
 data ArgTy a where
@@ -141,19 +127,19 @@ makeHandler args makeBody = do
   let body = makeBody parsed
   restrictTo defs body
 
-data FieldDecl m = FieldDecl
+data FieldDecl e m a = FieldDecl
   { _fieldDeclField :: G.FieldDefinition
-  , _fieldDeclHandler :: HandlerT m G.Value
+  , _fieldDeclHandler :: HandlerT m (Validation e a)
   }
 
-declareFieldFn :: MonadThrow m => G.Name -> G.Type -> Args a -> (a -> HandlerT m G.Value) -> FieldDecl m
+declareFieldFn :: MonadThrow m => G.Name -> G.Type -> Args a -> (a -> HandlerT m (Validation e a)) -> FieldDecl e m a
 declareFieldFn name retTy args makeBody =
   let defs = argDefs args
       field = G.FieldDefinition name defs retTy
       handler = makeHandler args makeBody
   in FieldDecl field handler
 
-declareFieldFn0 :: G.Name -> G.Type -> HandlerT m G.Value -> FieldDecl m
+declareFieldFn0 :: G.Name -> G.Type -> HandlerT m (Validation e a) -> FieldDecl e m a
 declareFieldFn0 name retTy body =
   let field = G.FieldDefinition name [] retTy
       handler = restrictTo [] body
@@ -162,10 +148,13 @@ declareFieldFn0 name retTy body =
 -- declareFieldObject :: G.Name -> ObjectDecl m -> FieldDecl m
 -- declareFieldObject name 
 
-data ObjectDecl m = ObjectDecl
+data ObjectDecl e m a = ObjectDecl
   { _objectDeclName :: G.Name
-  , _objectDeclFieldDecls :: [FieldDecl m]
+  , _objectDeclFieldDecls :: [FieldDecl e m a]
   }
 
-objTy :: ObjectDecl m -> G.Type
+objTy :: ObjectDecl e m a -> G.Type
 objTy = undefined
+
+objHandler :: ObjectDecl e m a -> HandlerT m (Validation e a)
+objHandler = undefined

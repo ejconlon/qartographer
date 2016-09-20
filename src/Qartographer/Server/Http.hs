@@ -12,7 +12,6 @@ import Web.Spock
 import Web.Spock.Config
 import System.Environment (getArgs)
 
--- TODO get port and run server
 httpMain :: IO ()
 httpMain = do
   args <- getArgs
@@ -21,7 +20,6 @@ httpMain = do
       [] -> return (8080, "graphql")
       [p, e] -> return (read p :: Int, e)
       _ -> fail "Expected (port, endpoint) or nothing for (8080, graphql)"
-
   serve port endpoint
 
 data AppSession = AppSession

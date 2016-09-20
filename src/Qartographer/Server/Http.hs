@@ -2,8 +2,12 @@
 
 module Qartographer.Server.Http where
 
+import qualified Data.GraphQL.AST as GA
+import qualified Data.GraphQL.Encoder as GE
 import Data.Monoid ((<>))
+import qualified Data.Text.Encoding as TE
 import Network.Wai.Middleware.Static
+import Prelude hiding (head)
 import Web.Spock
 import Web.Spock.Config
 import System.Environment (getArgs)
@@ -34,3 +38,9 @@ app endpoint = do
   middleware (staticPolicy (addBase "static"))
   get ("hello" <//> var) $ \name -> do
     text $ "hello " <> name
+
+runGraphql :: GA.Document -> SpockM conn sess st ()
+runGraphql doc = do
+  head root $ do
+    setHeader "Content-Type" "application/graphql; charset=utf-8"
+    bytes $ TE.encodeUtf8 $ GE.document doc

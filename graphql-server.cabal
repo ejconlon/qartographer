@@ -10,8 +10,9 @@ maintainer:          ejconlon@gmail.com
 copyright:           2016 Eric Conlon
 category:            Web
 build-type:          Simple
--- extra-source-files:
 cabal-version:       >=1.10
+extra-source-files:
+  static/graphiql.html
 
 library
   hs-source-dirs:      src
@@ -22,9 +23,11 @@ library
                      , free
                      , graphql
                      , mtl
+                     , Spock
                      , text
                      , transformers
                      , transformers-base
+                     , wai-middleware-static
   default-language:    Haskell2010
 
 executable graphql-server-exe

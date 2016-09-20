@@ -15,7 +15,8 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     GraphQL.Server
+  exposed-modules:     GraphQL.Server.Core
+                     , GraphQL.Server.Http
   build-depends:       base >= 4.9 && < 5
                      , exceptions
                      , free

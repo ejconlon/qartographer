@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-import GraphQL.Server
+import GraphQL.Server.Core
 
 import Control.Monad.Catch.Pure
 import Control.Monad.State

@@ -1,22 +1,44 @@
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module GraphQL.Server where
+module GraphQL.Server.Core where
 
 import qualified Data.GraphQL.AST as G
 import Control.Applicative.Free
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Reader
-import Control.Monad.Writer
+import Control.Monad.Writer hiding ((<>))
 import Data.Int
+import Data.Semigroup (Semigroup(..))
 import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Typeable
 import GHC.Exception
+
+-- newtype Validation e a = Validation {
+--   unValidation :: Either e a
+-- } deriving (Show, Eq, Functor, Foldable, Traversable)
+
+newtype Validation e a = Validation {
+  runValidation :: Either e a
+} deriving (Functor)
+
+instance Semigroup e => Applicative (Validation e ) where
+  pure = Validation . Right
+  (Validation x) <*> (Validation y) = Validation (z x y)
+    where
+      z (Left e1) (Left e2) = Left (e1 <> e2)
+      z (Left e1) (Right _) = Left e1
+      z (Right _) (Left e2) = Left e2
+      z (Right f) (Right a) = Right (f a)
+
+invalid :: e -> Validation e a
+invalid = Validation . Left
 
 data Resource m = Resource
   { _resourceDef :: G.ObjectTypeDefinition
@@ -30,6 +52,7 @@ data Root m = Root
 data HandlerEnv m = HandlerEnv
   { _handlerEnvRoot :: Root m
   , _handlerEnvArgs :: [(G.Name, G.Value)]
+  -- , _handlerSelSet  :: G.SelectionSet
   }
 
 data HandlerError =
@@ -123,20 +146,26 @@ data FieldDecl m = FieldDecl
   , _fieldDeclHandler :: HandlerT m G.Value
   }
 
-declareField :: MonadThrow m => G.Name -> G.Type -> Args a -> (a -> HandlerT m G.Value) -> FieldDecl m
-declareField name retTy args makeBody =
+declareFieldFn :: MonadThrow m => G.Name -> G.Type -> Args a -> (a -> HandlerT m G.Value) -> FieldDecl m
+declareFieldFn name retTy args makeBody =
   let defs = argDefs args
       field = G.FieldDefinition name defs retTy
       handler = makeHandler args makeBody
   in FieldDecl field handler
 
-declareField0 :: G.Name -> G.Type -> HandlerT m G.Value -> FieldDecl m
-declareField0 name retTy body =
+declareFieldFn0 :: G.Name -> G.Type -> HandlerT m G.Value -> FieldDecl m
+declareFieldFn0 name retTy body =
   let field = G.FieldDefinition name [] retTy
       handler = restrictTo [] body
   in FieldDecl field handler
+
+-- declareFieldObject :: G.Name -> ObjectDecl m -> FieldDecl m
+-- declareFieldObject name 
 
 data ObjectDecl m = ObjectDecl
   { _objectDeclName :: G.Name
   , _objectDeclFieldDecls :: [FieldDecl m]
   }
+
+objTy :: ObjectDecl m -> G.Type
+objTy = undefined

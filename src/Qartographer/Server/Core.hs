@@ -5,7 +5,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module GraphQL.Server.Core where
+module Qartographer.Server.Core where
 
 import qualified Data.GraphQL.AST as G
 import Control.Applicative.Free

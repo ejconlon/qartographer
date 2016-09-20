@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module GraphQL.Server.Http where
+module Qartographer.Server.Http where
 
 import Data.Monoid ((<>))
 import Network.Wai.Middleware.Static

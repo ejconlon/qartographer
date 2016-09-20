@@ -1,9 +1,9 @@
-name:                graphql-server
+name:                qartographer
 version:             0.1.0.0
 synopsis:            Initial project template from stack
 description:         Please see README.md
-homepage:            https://github.com/ejconlon/graphql-server#readme
-license:             BSD3
+homepage:            https://github.com/ejconlon/qartographer#readme
+license:             AllRightsReserved
 license-file:        LICENSE
 author:              Eric Conlon
 maintainer:          ejconlon@gmail.com
@@ -16,8 +16,8 @@ extra-source-files:
 
 library
   hs-source-dirs:      src
-  exposed-modules:     GraphQL.Server.Core
-                     , GraphQL.Server.Http
+  exposed-modules:     Qartographer.Server.Core
+                     , Qartographer.Server.Http
   build-depends:       base >= 4.9 && < 5
                      , exceptions
                      , free
@@ -30,15 +30,15 @@ library
                      , wai-middleware-static
   default-language:    Haskell2010
 
-executable graphql-server-exe
+executable qartographer-exe
   hs-source-dirs:      app
   main-is:             Main.hs
   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
   build-depends:       base
-                     , graphql-server
+                     , qartographer
   default-language:    Haskell2010
 
-test-suite graphql-server-test
+test-suite qartographer-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
@@ -46,8 +46,8 @@ test-suite graphql-server-test
                      , exceptions
                      , free
                      , graphql
-                     , graphql-server
                      , mtl
+                     , qartographer
                      , tasty
                      , tasty-hunit
                      , text
@@ -58,4 +58,4 @@ test-suite graphql-server-test
 
 source-repository head
   type:     git
-  location: https://github.com/ejconlon/graphql-server
+  location: https://github.com/ejconlon/qartographer

@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
-import GraphQL.Server.Core
+import Qartographer.Server.Core
 
 import Control.Monad.Catch.Pure
 import Control.Monad.State

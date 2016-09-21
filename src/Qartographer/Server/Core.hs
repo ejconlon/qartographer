@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -9,6 +8,7 @@ module Qartographer.Server.Core where
 
 import qualified Data.GraphQL.AST as G
 import Control.Applicative.Free
+import Data.Functor.Compose (Compose(..))
 import Control.Monad.Base
 import Control.Monad.Catch
 import Control.Monad.Reader
@@ -19,22 +19,7 @@ import qualified Data.Text as T
 import Data.Text (Text)
 import Data.Typeable
 import GHC.Exception
-
-newtype Validation e a = Validation {
-  runValidation :: Either e a
-} deriving (Functor)
-
-instance Semigroup e => Applicative (Validation e) where
-  pure = Validation . Right
-  (Validation x) <*> (Validation y) = Validation (z x y)
-    where
-      z (Left e1) (Left e2) = Left (e1 <> e2)
-      z (Left e1) (Right _) = Left e1
-      z (Right _) (Left e2) = Left e2
-      z (Right f) (Right a) = Right (f a)
-
-invalid :: e -> Validation e a
-invalid = Validation . Left
+import Qartographer.Core.Validation
 
 data HandlerEnv = HandlerEnv
   { _handlerEnvArgs :: [(G.Name, G.Value)]
@@ -44,12 +29,13 @@ data HandlerEnv = HandlerEnv
 data HandlerError =
     NoArgError G.Name
   | BadArgTypeError G.Name G.Type G.Value
-  deriving (Eq, Show, Typeable)
-instance Exception HandlerError
+  deriving (Eq, Show)
+
+type V = Validation [HandlerError]
 
 newtype HandlerT m a = HandlerT
   { unHandlerT :: ReaderT HandlerEnv m a
-  } deriving (Functor, Applicative, Monad, MonadReader HandlerEnv, MonadThrow)
+  } deriving (Functor, Applicative, Monad, MonadReader HandlerEnv)
 
 instance MonadTrans HandlerT where
   lift = HandlerT . lift
@@ -57,7 +43,7 @@ instance MonadTrans HandlerT where
 instance Monad m => MonadBase m (HandlerT m) where
   liftBase = lift
 
-runHandlerT :: Monad m =>  HandlerT m a -> HandlerEnv -> m a
+runHandlerT :: Monad m => HandlerT m a -> HandlerEnv -> m a
 runHandlerT = runReaderT . unHandlerT
 
 data ArgTy a where
@@ -74,19 +60,9 @@ extTy :: ArgTy a -> G.Type
 extTy StringArgTy = stringTy
 extTy IntArgTy = intTy
 
-data ArgDef a = ArgDef
-  { _argDefName :: G.Name
-  , _argDefDefault :: Maybe G.Value
-  , _argDefType :: ArgTy a
-  }
-
-extDef :: ArgDef a -> G.InputValueDefinition
-extDef (ArgDef name def ty) = G.InputValueDefinition name (extTy ty) def
-
-type Args a = Ap ArgDef a
-
-argDefs :: Args a -> G.ArgumentsDefinition
-argDefs = runAp_ (return . extDef)
+encodeGValue :: ArgTy a -> a -> G.Value
+encodeGValue StringArgTy t = G.ValueString (G.StringValue t)
+encodeGValue IntArgTy i = G.ValueInt i
 
 projectString :: G.Value -> Maybe Text
 projectString (G.ValueString (G.StringValue t)) = Just t
@@ -102,59 +78,76 @@ projectTy argTy =
     StringArgTy -> projectString
     IntArgTy -> projectInt
 
--- ~ natural transformation
-lookupArg :: MonadThrow m => ArgDef a -> HandlerT m a
-lookupArg (ArgDef name def argTy) = do
-  args <- asks _handlerEnvArgs
-  case lookup name args of
-    Nothing -> throwM $ NoArgError name
-    Just value ->
-      case projectTy argTy value of
-        Nothing -> throwM $ BadArgTypeError name (extTy argTy) value
-        Just parsed -> return parsed
-
--- TODO actually restrict
-restrictTo :: G.ArgumentsDefinition -> HandlerT m a -> HandlerT m a
-restrictTo args act = act
-
-interpret :: MonadThrow m => Args a -> HandlerT m a
-interpret = runAp lookupArg
-
-makeHandler :: MonadThrow m => Args a -> (a -> HandlerT m b) -> HandlerT m b
-makeHandler args makeBody = do
-  let defs = argDefs args
-  parsed <- interpret args
-  let body = makeBody parsed
-  restrictTo defs body
-
-data FieldDecl e m a = FieldDecl
-  { _fieldDeclField :: G.FieldDefinition
-  , _fieldDeclHandler :: HandlerT m (Validation e a)
+data ArgDef a = ArgDef
+  { _argDefName :: G.Name
+  , _argDefDefault :: Maybe G.Value
+  , _argDefType :: ArgTy a
   }
 
-declareFieldFn :: MonadThrow m => G.Name -> G.Type -> Args a -> (a -> HandlerT m (Validation e a)) -> FieldDecl e m a
+extDef :: ArgDef a -> G.InputValueDefinition
+extDef (ArgDef name def ty) = G.InputValueDefinition name (extTy ty) def
+
+type Args a = Ap ArgDef a
+
+argDefs :: Args a -> G.ArgumentsDefinition
+argDefs = runAp_ (return . extDef)
+
+lookupArg :: Monad m => ArgDef a -> HandlerT m (V a)
+lookupArg (ArgDef name def argTy) = do
+  args <- asks _handlerEnvArgs
+  return $
+    case lookup name args of
+      Nothing -> invalid [NoArgError name]
+      Just value ->
+        case projectTy argTy value of
+          Nothing -> invalid [BadArgTypeError name (extTy argTy) value]
+          Just parsed -> pure parsed
+
+-- TODO actually restrict
+restrictTo :: Monad m => G.ArgumentsDefinition -> HandlerT m a -> HandlerT m a
+restrictTo args = local restricted
+  where
+    restricted = id
+
+interpret :: Monad m => Args a -> HandlerT m (V a)
+interpret args = getCompose $ runAp (Compose . lookupArg) args
+
+makeHandler :: Monad m => Args a -> (a -> HandlerT m (V b)) -> HandlerT m (V b)
+makeHandler args makeBody =
+  interpret args >>- restrictTo (argDefs args) . makeBody
+
+data FieldDecl m a = FieldDecl
+  { _fieldDeclField :: G.FieldDefinition
+  , _fieldDeclHandler :: HandlerT m (V a)
+  }
+
+data ObjectDecl m a = ObjectDecl
+  { _objectDeclName :: G.Name
+  , _objectDeclFieldDecls :: [FieldDecl m a]
+  }
+
+objFields :: ObjectDecl m a -> [G.FieldDefinition]
+objFields (ObjectDecl _ fields) = _fieldDeclField <$> fields
+
+objHandler :: ObjectDecl m a -> HandlerT m (V a)
+objHandler = undefined
+
+declareFieldFn :: Monad m => G.Name -> G.Type -> Args a -> (a -> HandlerT m (V b)) -> FieldDecl m b
 declareFieldFn name retTy args makeBody =
   let defs = argDefs args
       field = G.FieldDefinition name defs retTy
       handler = makeHandler args makeBody
   in FieldDecl field handler
 
-declareFieldFn0 :: G.Name -> G.Type -> HandlerT m (Validation e a) -> FieldDecl e m a
-declareFieldFn0 name retTy body =
-  let field = G.FieldDefinition name [] retTy
-      handler = restrictTo [] body
-  in FieldDecl field handler
+declareFieldFn0 :: Monad m => G.Name -> G.Type -> HandlerT m (V b) -> FieldDecl m b
+declareFieldFn0 name retTy body = declareFieldFn name retTy (pure ()) (const body)
 
--- declareFieldObject :: G.Name -> ObjectDecl m -> FieldDecl m
--- declareFieldObject name 
+-- declareFieldObj :: G.Name -> Args a -> (a -> ObjectDecl m b) -> FieldDecl m b
+-- declareFieldObj name args decl =
+--   let defs = argDefs args
+--       field = G.FieldDefinition name defs (G.NamedType (_objectDeclName decl))
+--       handler = restrictTo defs (objHandler decl)
+--   in FieldDecl field handler
 
-data ObjectDecl e m a = ObjectDecl
-  { _objectDeclName :: G.Name
-  , _objectDeclFieldDecls :: [FieldDecl e m a]
-  }
-
-objTy :: ObjectDecl e m a -> G.Type
-objTy = undefined
-
-objHandler :: ObjectDecl e m a -> HandlerT m (Validation e a)
-objHandler = undefined
+-- declareFieldObj0 :: G.Name -> ObjectDecl m b -> FieldDecl m b
+-- declareFieldObj0 name decl = declareFieldObj name (pure ()) (const decl)

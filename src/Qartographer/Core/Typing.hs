@@ -3,20 +3,28 @@
 module Qartographer.Core.Typing where
 
 import           Control.Applicative          ((<|>))
+import qualified Data.Aeson                   as A
+import           Data.Aeson                   ((.=))
 import qualified Data.Attoparsec.Text         as AT
 import qualified Data.GraphQL.AST             as G
 import qualified Data.GraphQL.Encoder         as GE
 import qualified Data.GraphQL.Parser          as GP
 import           Data.HashMap.Strict          (HashMap)
 import qualified Data.HashMap.Strict          as HMS
+import qualified Data.Text                    as T
 import           Data.Text                    (Text)
 import           Qartographer.Core.Validation
 
 data Reason =
     TypeNotFound Text
+  | ParserError Text
   deriving (Show, Eq)
 
 type VR a = Validation [Reason] a
+
+fromParseResult :: Either String a -> VR a
+fromParseResult (Left e) = invalidF $ ParserError $ T.pack e
+fromParseResult (Right a) = pure a
 
 type TypeMap = HashMap Text G.TypeDefinition
 
@@ -28,28 +36,18 @@ data Schema = Schema
   --, _schemaDirectives :: Directive
   } deriving (Show, Eq)
 
-makeObject :: [(G.Name, G.Value)] -> G.Value
-makeObject = undefined
+makeNamed :: G.Name -> Text -> [(Text, A.Value)]
+makeNamed nn n = [(nn, A.object ["name" .= n])]
 
-makeString :: Text -> G.Value
-makeString = G.ValueString . G.StringValue
+instance A.ToJSON Schema where
+  toJSON (Schema qtn mtn stn types) =
+    A.object $
+      (makeNamed "queryType" qtn)
+      ++ (maybe [] (makeNamed "mutationType") mtn)
+      ++ (maybe [] (makeNamed "subscriptionType") stn)
 
-makeNamed :: G.Name -> Text -> [(G.Name, G.Value)]
-makeNamed nn n = [(nn, makeObject [("name", makeString n)])]
-
-renderSchema :: Schema -> G.Value
-renderSchema (Schema qtn mtn stn types) =
-  makeObject $
-    (makeNamed "queryType" qtn)
-    ++ (maybe [] (makeNamed "mutationType") mtn)
-    ++ (maybe [] (makeNamed "subscriptionType") stn)
-
-
--- runParser :: AT.Parser a -> Text -> Either String a
--- runParser parser = AT.parseOnly (parser <* AT.endOfInput)
-
-parseTypeDefs :: Text -> Either String [G.TypeDefinition]
-parseTypeDefs = AT.parseOnly (parser <* AT.endOfInput)
+parseTypeDefs :: Text -> VR [G.TypeDefinition]
+parseTypeDefs = fromParseResult . AT.parseOnly (parser <* AT.endOfInput)
   where parser = GP.whiteSpace *> AT.many1 GP.typeDefinition
 
 renderTypeDefs :: [G.TypeDefinition] -> Text
@@ -64,8 +62,8 @@ qdocToDef :: Qdoc -> G.Definition
 qdocToDef (OpQdoc op)     = G.DefinitionOperation op
 qdocToDef (FragQdoc frag) = G.DefinitionFragment frag
 
-parseQdocs :: Text -> Either String [Qdoc]
-parseQdocs = AT.parseOnly (parser <* AT.endOfInput)
+parseQdocs :: Text -> VR [Qdoc]
+parseQdocs = fromParseResult . AT.parseOnly (parser <* AT.endOfInput)
   where parser = GP.whiteSpace *> AT.many1 (opParser <|> fragParser)
         opParser = OpQdoc <$> GP.operationDefinition
         fragParser = FragQdoc <$> GP.fragmentDefinition

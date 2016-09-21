@@ -3,6 +3,7 @@
 module Qartographer.Server.Http where
 
 import           Control.Monad                 (forM_)
+import qualified Data.Aeson                    as A
 import           Data.HashMap.Strict           (HashMap)
 import qualified Data.HashMap.Strict           as HMS
 import           Data.Monoid                   ((<>))
@@ -53,3 +54,5 @@ app schemas = do
         get "types" $ do
           setHeader "Content-Type" contentTypeGraphQL
           bytes $ TE.encodeUtf8 $ renderTypeDefs $ HMS.elems $ _schemaTypes schema
+        get "schema" $ do
+          json schema

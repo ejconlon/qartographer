@@ -51,3 +51,9 @@ Can a valid set of operations be performed against this valid schema?
 Does a given value satisfy a valid query?
   Shape and attributes are correct
 
+---
+
+What are valid query(+mutation) documents? only operation (query/mutation) + fragment defs
+https://facebook.github.io/graphql/#sec-Language.Query-Document
+
+What are valid schema documents? Only type defs?

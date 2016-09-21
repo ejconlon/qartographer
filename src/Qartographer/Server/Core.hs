@@ -1,25 +1,25 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE MultiParamTypeClasses      #-}
+{-# LANGUAGE OverloadedStrings          #-}
 
 module Qartographer.Server.Core where
 
-import qualified Data.GraphQL.AST as G
-import Control.Applicative.Free
-import Data.Functor.Compose (Compose(..))
-import Control.Monad.Base
-import Control.Monad.Catch
-import Control.Monad.Reader
-import Control.Monad.Writer hiding ((<>))
-import Data.Int
-import Data.Semigroup (Semigroup(..))
-import qualified Data.Text as T
-import Data.Text (Text)
-import Data.Typeable
-import GHC.Exception
-import Qartographer.Core.Validation
+import           Control.Applicative.Free
+import           Control.Monad.Base
+import           Control.Monad.Catch
+import           Control.Monad.Reader
+import           Control.Monad.Writer         hiding ((<>))
+import           Data.Functor.Compose         (Compose (..))
+import qualified Data.GraphQL.AST             as G
+import           Data.Int
+import           Data.Semigroup               (Semigroup (..))
+import           Data.Text                    (Text)
+import qualified Data.Text                    as T
+import           Data.Typeable
+import           GHC.Exception
+import           Qartographer.Core.Validation
 
 data HandlerEnv = HandlerEnv
   { _handlerEnvArgs :: [(G.Name, G.Value)]
@@ -58,30 +58,30 @@ intTy = G.TypeNamed $ G.NamedType "Int"
 
 extTy :: ArgTy a -> G.Type
 extTy StringArgTy = stringTy
-extTy IntArgTy = intTy
+extTy IntArgTy    = intTy
 
 encodeGValue :: ArgTy a -> a -> G.Value
 encodeGValue StringArgTy t = G.ValueString (G.StringValue t)
-encodeGValue IntArgTy i = G.ValueInt i
+encodeGValue IntArgTy i    = G.ValueInt i
 
 projectString :: G.Value -> Maybe Text
 projectString (G.ValueString (G.StringValue t)) = Just t
-projectString _ = Nothing
+projectString _                                 = Nothing
 
 projectInt :: G.Value -> Maybe Int32
 projectInt (G.ValueInt i) = Just i
-projectInt _ = Nothing
+projectInt _              = Nothing
 
 projectTy :: ArgTy a -> G.Value -> Maybe a
 projectTy argTy =
   case argTy of
     StringArgTy -> projectString
-    IntArgTy -> projectInt
+    IntArgTy    -> projectInt
 
 data ArgDef a = ArgDef
-  { _argDefName :: G.Name
+  { _argDefName    :: G.Name
   , _argDefDefault :: Maybe G.Value
-  , _argDefType :: ArgTy a
+  , _argDefType    :: ArgTy a
   }
 
 extDef :: ArgDef a -> G.InputValueDefinition
@@ -100,7 +100,7 @@ lookupArg (ArgDef name def argTy) = do
       Nothing -> invalidF (NoArgError name)
       Just value ->
         case projectTy argTy value of
-          Nothing -> invalidF (BadArgTypeError name (extTy argTy) value)
+          Nothing     -> invalidF (BadArgTypeError name (extTy argTy) value)
           Just parsed -> pure parsed
 
 -- TODO actually restrict
@@ -117,12 +117,12 @@ makeHandler args makeBody =
   interpret args >>- restrictTo (argDefs args) . makeBody
 
 data FieldDecl m a = FieldDecl
-  { _fieldDeclField :: G.FieldDefinition
+  { _fieldDeclField   :: G.FieldDefinition
   , _fieldDeclHandler :: HandlerT m (VH a)
   }
 
 data ObjectDecl m a = ObjectDecl
-  { _objectDeclName :: G.Name
+  { _objectDeclName       :: G.Name
   , _objectDeclFieldDecls :: [FieldDecl m a]
   }
 

@@ -2,12 +2,12 @@
 
 module Qartographer.Core.Typing where
 
-import qualified Data.GraphQL.AST as G
-import qualified Data.GraphQL.Encoder as GE
-import qualified Data.HashMap.Strict as HMS
-import Data.HashMap.Strict (HashMap)
-import Data.Text (Text)
-import Qartographer.Core.Validation
+import qualified Data.GraphQL.AST             as G
+import qualified Data.GraphQL.Encoder         as GE
+import           Data.HashMap.Strict          (HashMap)
+import qualified Data.HashMap.Strict          as HMS
+import           Data.Text                    (Text)
+import           Qartographer.Core.Validation
 
 data Reason =
     TypeNotFound Text
@@ -18,10 +18,10 @@ type VR a = Validation [Reason] a
 type TypeMap = HashMap Text G.TypeDefinition
 
 data Schema = Schema
-  { _schemaQueryTypeName :: Text
-  , _schemaMutationTypeName :: Maybe Text
+  { _schemaQueryTypeName        :: Text
+  , _schemaMutationTypeName     :: Maybe Text
   , _schemaSubscriptionTypeName :: Maybe Text
-  , _schemaTypes :: TypeMap
+  , _schemaTypes                :: TypeMap
   --, _schemaDirectives :: Directive
   } deriving (Show, Eq)
 
@@ -53,7 +53,7 @@ data Qdoc =
   deriving (Show, Eq)
 
 qdocToDef :: Qdoc -> G.Definition
-qdocToDef (OpQdoc op) = G.DefinitionOperation op
+qdocToDef (OpQdoc op)     = G.DefinitionOperation op
 qdocToDef (FragQdoc frag) = G.DefinitionFragment frag
 
 parseQdocs :: Text -> Either String [Qdoc]
@@ -81,7 +81,7 @@ lookupDef name tmap =
     "String" -> pure (PrimDef StringPrim)
     _ ->
       case HMS.lookup name tmap of
-        Nothing -> invalidF (TypeNotFound name)
+        Nothing  -> invalidF (TypeNotFound name)
         Just def -> pure (UserDef def)
 
 isValidSchema :: Schema -> VR ()

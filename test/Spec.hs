@@ -1,18 +1,18 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE QuasiQuotes                #-}
 
-import Qartographer.Server.Core
+import           Qartographer.Server.Core
 
-import qualified Data.Attoparsec.Text as AT
-import qualified Data.GraphQL.AST as G
-import qualified Data.GraphQL.Parser as GP
-import qualified Data.Text as T
-import Data.Text (Text)
-import Control.Monad.State
-import Test.Tasty
-import Test.Tasty.HUnit
-import Text.Heredoc (str)
+import           Control.Monad.State
+import qualified Data.Attoparsec.Text     as AT
+import qualified Data.GraphQL.AST         as G
+import qualified Data.GraphQL.Parser      as GP
+import           Data.Text                (Text)
+import qualified Data.Text                as T
+import           Test.Tasty
+import           Test.Tasty.HUnit
+import           Text.Heredoc             (str)
 
 -- Parsing utils
 

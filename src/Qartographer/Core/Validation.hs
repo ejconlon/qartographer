@@ -2,7 +2,7 @@
 
 module Qartographer.Core.Validation where
 
-import Data.Semigroup (Semigroup(..))
+import           Data.Semigroup (Semigroup (..))
 
 newtype Validation e a = Validation {
   runValidation :: Either e a

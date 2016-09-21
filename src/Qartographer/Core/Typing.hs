@@ -2,8 +2,10 @@
 
 module Qartographer.Core.Typing where
 
+import qualified Data.Attoparsec.Text         as AT
 import qualified Data.GraphQL.AST             as G
 import qualified Data.GraphQL.Encoder         as GE
+import qualified Data.GraphQL.Parser          as GP
 import           Data.HashMap.Strict          (HashMap)
 import qualified Data.HashMap.Strict          as HMS
 import           Data.Text                    (Text)
@@ -41,8 +43,13 @@ renderSchema (Schema qtn mtn stn types) =
     ++ (maybe [] (makeNamed "mutationType") mtn)
     ++ (maybe [] (makeNamed "subscriptionType") stn)
 
+
+-- runParser :: AT.Parser a -> Text -> Either String a
+-- runParser parser = AT.parseOnly (parser <* AT.endOfInput)
+
 parseTypeDefs :: Text -> Either String [G.TypeDefinition]
-parseTypeDefs = undefined
+parseTypeDefs = AT.parseOnly (parser <* AT.endOfInput)
+  where parser = GP.whiteSpace *> AT.many1 GP.typeDefinition
 
 renderTypeDefs :: [G.TypeDefinition] -> Text
 renderTypeDefs defs = GE.document (G.Document (G.DefinitionType <$> defs))

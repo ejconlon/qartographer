@@ -2,43 +2,54 @@
 
 module Qartographer.Server.Http where
 
-import qualified Data.GraphQL.AST as GA
-import qualified Data.GraphQL.Encoder as GE
+import Control.Monad (forM_)
+import qualified Data.HashMap.Strict as HMS
+import Data.HashMap.Strict (HashMap)
 import Data.Monoid ((<>))
+import qualified Data.Text as T
+import Data.Text (Text)
 import qualified Data.Text.Encoding as TE
-import Network.Wai.Middleware.Static
+import Network.Wai.Middleware.Static (hasPrefix, staticPolicy)
 import Prelude hiding (head)
 import Web.Spock
 import Web.Spock.Config
+import Qartographer.Core.Typing
 import System.Environment (getArgs)
+
+testSchema :: Schema
+testSchema = Schema "Foo" Nothing Nothing HMS.empty
 
 httpMain :: IO ()
 httpMain = do
   args <- getArgs
-  (port, endpoint) <-
+  port <-
     case args of
-      [] -> return (8080, "graphql")
-      [p, e] -> return (read p :: Int, e)
-      _ -> fail "Expected (port, endpoint) or nothing for (8080, graphql)"
-  serve port endpoint
+      [] -> return 8080
+      [p] -> return (read p :: Int)
+      _ -> fail "Expected [port] or nothing for [8080]"
+  let schemas = HMS.fromList [("test", testSchema)]
+  serve port schemas
 
 data AppSession = AppSession
 
 data AppState = AppState
 
-serve :: Int -> String -> IO ()
-serve port endpoint = do
+serve :: Int -> HashMap Text Schema -> IO ()
+serve port schemas = do
   spockCfg <- defaultSpockCfg AppSession PCNoDatabase AppState
-  runSpock port (spock spockCfg (app endpoint))
+  runSpock port (spock spockCfg (app schemas))
 
-app :: String -> SpockM () AppSession AppState ()
-app endpoint = do
-  middleware (staticPolicy (addBase "static"))
+contentTypeGraphQL :: Text
+contentTypeGraphQL = "application/graphql; charset=utf-8"
+
+app :: HashMap Text Schema -> SpockM () AppSession AppState ()
+app schemas = do
+  middleware (staticPolicy (hasPrefix "static"))
   get ("hello" <//> var) $ \name -> do
     text $ "hello " <> name
-
-runGraphql :: GA.Document -> SpockM conn sess st ()
-runGraphql doc = do
-  head root $ do
-    setHeader "Content-Type" "application/graphql; charset=utf-8"
-    bytes $ TE.encodeUtf8 $ GE.document doc
+  subcomponent "schemas" $ do
+    forM_ (HMS.toList schemas) $ \(name, schema) -> do
+      subcomponent (static (T.unpack name)) $ do
+        get "types" $ do
+          setHeader "Content-Type" contentTypeGraphQL
+          bytes $ TE.encodeUtf8 $ renderTypeDefs $ HMS.elems $ _schemaTypes schema

@@ -3,6 +3,7 @@
 module Qartographer.Core.Typing where
 
 import qualified Data.GraphQL.AST as G
+import qualified Data.GraphQL.Encoder as GE
 import qualified Data.HashMap.Strict as HMS
 import Data.HashMap.Strict (HashMap)
 import Data.Text (Text)
@@ -44,18 +45,22 @@ parseTypeDefs :: Text -> Either String [G.TypeDefinition]
 parseTypeDefs = undefined
 
 renderTypeDefs :: [G.TypeDefinition] -> Text
-renderTypeDefs = undefined
+renderTypeDefs defs = GE.document (G.Document (G.DefinitionType <$> defs))
 
 data Qdoc =
     OpQdoc G.OperationDefinition
   | FragQdoc G.FragmentDefinition
   deriving (Show, Eq)
 
+qdocToDef :: Qdoc -> G.Definition
+qdocToDef (OpQdoc op) = G.DefinitionOperation op
+qdocToDef (FragQdoc frag) = G.DefinitionFragment frag
+
 parseQdocs :: Text -> Either String [Qdoc]
 parseQdocs = undefined
 
 renderQdocs :: [Qdoc] -> Text
-renderQdocs = undefined
+renderQdocs qdocs = GE.document (G.Document (qdocToDef <$> qdocs))
 
 data Primitive = IntPrim
                | FloatPrim

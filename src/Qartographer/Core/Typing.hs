@@ -14,7 +14,48 @@ data Reason =
 
 type VR a = Validation [Reason] a
 
-type Schema = HashMap Text G.TypeDefinition
+type TypeMap = HashMap Text G.TypeDefinition
+
+data Schema = Schema
+  { _schemaQueryTypeName :: Text
+  , _schemaMutationTypeName :: Maybe Text
+  , _schemaSubscriptionTypeName :: Maybe Text
+  , _schemaTypes :: TypeMap
+  --, _schemaDirectives :: Directive
+  } deriving (Show, Eq)
+
+makeObject :: [(G.Name, G.Value)] -> G.Value
+makeObject = undefined
+
+makeString :: Text -> G.Value
+makeString = G.ValueString . G.StringValue
+
+makeNamed :: G.Name -> Text -> [(G.Name, G.Value)]
+makeNamed nn n = [(nn, makeObject [("name", makeString n)])]
+
+renderSchema :: Schema -> G.Value
+renderSchema (Schema qtn mtn stn types) =
+  makeObject $
+    (makeNamed "queryType" qtn)
+    ++ (maybe [] (makeNamed "mutationType") mtn)
+    ++ (maybe [] (makeNamed "subscriptionType") stn)
+
+parseTypeDefs :: Text -> Either String [G.TypeDefinition]
+parseTypeDefs = undefined
+
+renderTypeDefs :: [G.TypeDefinition] -> Text
+renderTypeDefs = undefined
+
+data Qdoc =
+    OpQdoc G.OperationDefinition
+  | FragQdoc G.FragmentDefinition
+  deriving (Show, Eq)
+
+parseQdocs :: Text -> Either String [Qdoc]
+parseQdocs = undefined
+
+renderQdocs :: [Qdoc] -> Text
+renderQdocs = undefined
 
 data Primitive = IntPrim
                | FloatPrim
@@ -26,20 +67,17 @@ data TypeDef = PrimDef Primitive
              | UserDef G.TypeDefinition
              deriving (Show, Eq)
 
-lookupDef :: Text -> Schema -> VR TypeDef
-lookupDef name schema =
+lookupDef :: Text -> TypeMap -> VR TypeDef
+lookupDef name tmap =
   case name of
     "Int" -> pure (PrimDef IntPrim)
     "Float" -> pure (PrimDef FloatPrim)
     "Bool" -> pure (PrimDef BoolPrim)
     "String" -> pure (PrimDef StringPrim)
     _ ->
-      case HMS.lookup name schema of
+      case HMS.lookup name tmap of
         Nothing -> invalidF (TypeNotFound name)
         Just def -> pure (UserDef def)
-
-documentToSchema :: G.Document -> VR Schema
-documentToSchema = undefined
 
 isValidSchema :: Schema -> VR ()
 isValidSchema = undefined

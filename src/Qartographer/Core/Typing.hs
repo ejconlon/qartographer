@@ -2,6 +2,7 @@
 
 module Qartographer.Core.Typing where
 
+import           Control.Applicative          ((<|>))
 import qualified Data.Attoparsec.Text         as AT
 import qualified Data.GraphQL.AST             as G
 import qualified Data.GraphQL.Encoder         as GE
@@ -64,7 +65,10 @@ qdocToDef (OpQdoc op)     = G.DefinitionOperation op
 qdocToDef (FragQdoc frag) = G.DefinitionFragment frag
 
 parseQdocs :: Text -> Either String [Qdoc]
-parseQdocs = undefined
+parseQdocs = AT.parseOnly (parser <* AT.endOfInput)
+  where parser = GP.whiteSpace *> AT.many1 (opParser <|> fragParser)
+        opParser = OpQdoc <$> GP.operationDefinition
+        fragParser = FragQdoc <$> GP.fragmentDefinition
 
 renderQdocs :: [Qdoc] -> Text
 renderQdocs qdocs = GE.document (G.Document (qdocToDef <$> qdocs))

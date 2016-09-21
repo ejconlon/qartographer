@@ -1,0 +1,53 @@
+thoughts:
+
+what's cool about graphql?
+simplifies writing, maintaining api
+evolvable, declarative, typed
+
+apollo/reindex/scaphold stake out points in the services domain
+- monitoring-aas
+- backend-aas
+- adaptor-aas
+
+what is the story with mobile?  look to realm maybe?
+it looks like orm
+
+for analytics, not a good fit, you often need functions, predicates, closures, etc
+from the host language to perform aggregations and selections
+
+----
+
+GraphQL proxy
+First need a working graphql server and client...
+
+Serving http:
+
+Content-Type "application/graphql"
+HEAD gets a schema
+GET for queries, but not for mutations
+POST also supported for queries and mutations
+
+Premium features from Apollo
+GraphQL Query Inspection
+View comprehensive details about GraphQL queries including trace duration times.
+Query Latency Reporting
+Identify queries that require attention and optimization through latency histograms and usage benchmarks.
+Field Usage Analytics
+Understand the usage of GraphQL schema fields through resolver execution frequency across queries.
+
+---
+
+Interesting type-oriented features:
+Is a given schema "complete?"
+  All named types can be resolved
+Can we serve the given complete schema?
+  Must have Query type with appropriate attrs
+Is a given set of operations valid?
+  All fragments can be resolved
+  All variables are used
+Can a valid set of operations be performed against this valid schema?
+  All named types can be resolved
+  More? https://facebook.github.io/graphql/#sec-Validation
+Does a given value satisfy a valid query?
+  Shape and attributes are correct
+

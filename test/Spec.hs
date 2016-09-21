@@ -1,42 +1,47 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 import Qartographer.Server.Core
 
-import Control.Monad.Catch.Pure
+import qualified Data.Attoparsec.Text as AT
+import qualified Data.GraphQL.AST as G
+import qualified Data.GraphQL.Parser as GP
+import qualified Data.Text as T
+import Data.Text (Text)
 import Control.Monad.State
 import Test.Tasty
 import Test.Tasty.HUnit
+import Text.Heredoc (str)
 
--- Utilities to work with exception equality:
+-- Parsing utils
 
-isOkLike :: (Eq a, Show a) => Either SomeException a -> (a -> Assertion) -> Assertion
-isOkLike (Left e) _ = fail $ "got fail " ++ show e
-isOkLike (Right x) f = f x
-
-isOk :: (Eq a, Show a) => Either SomeException a -> a -> Assertion
-isOk v a = isOkLike v (@?= a)
-
-isFailLike :: (Show a, Exception e, Eq e) => Either SomeException a -> (e -> Assertion) -> Assertion
-isFailLike (Right x) _ = fail $ "got ok " ++ show x
-isFailLike (Left z) f =
-  case fromException z of
-    Nothing -> fail $ "incompatible: " ++ show z
-    Just x -> f x
-
-isFail :: (Show a, Exception e, Eq e) => Either SomeException a -> e -> Assertion
-isFail v e = isFailLike v (@?= e)
+runParser :: AT.Parser a -> Text -> Either String a
+runParser parser = AT.parseOnly (parser <* AT.endOfInput)
 
 -- Now actual tests
+
+testParsing :: TestTree
+testParsing = testCase "Parsing" $ do
+  let a0 = runParser GP.typeDefinition "type Foo { bar: String }"
+      f0 = G.FieldDefinition "bar" [] (G.TypeNamed (G.NamedType "String"))
+      e0 = Right (G.TypeDefinitionObject (G.ObjectTypeDefinition "Foo" [] [f0]))
+  a0 @?= e0
+  let a1 = runParser GP.typeDefinition "type Foo { bar(baz: Int = 1): String }"
+      g1 = G.InputValueDefinition "baz" (G.TypeNamed (G.NamedType "Int")) (Just (G.ValueInt 1))
+      f1 = G.FieldDefinition "bar" [g1] (G.TypeNamed (G.NamedType "String"))
+      e1 = Right (G.TypeDefinitionObject (G.ObjectTypeDefinition "Foo" [] [f1]))
+  a1 @?= e1
 
 data BaseState = BaseState deriving (Eq, Show)
 
 newtype BaseM a = BaseM
-  { unBaseM :: StateT BaseState Catch a
-  } deriving (Functor, Applicative, Monad, MonadState BaseState, MonadThrow)
+  { unBaseM :: State BaseState a
+  } deriving (Functor, Applicative, Monad, MonadState BaseState)
 
 tests :: TestTree
 tests = testGroup "Tests"
-  [
+  [ testParsing
   ]
 
 main :: IO ()

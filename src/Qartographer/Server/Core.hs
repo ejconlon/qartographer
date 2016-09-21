@@ -31,7 +31,7 @@ data HandlerError =
   | BadArgTypeError G.Name G.Type G.Value
   deriving (Eq, Show)
 
-type V = Validation [HandlerError]
+type VH a = Validation [HandlerError] a
 
 newtype HandlerT m a = HandlerT
   { unHandlerT :: ReaderT HandlerEnv m a
@@ -92,15 +92,15 @@ type Args a = Ap ArgDef a
 argDefs :: Args a -> G.ArgumentsDefinition
 argDefs = runAp_ (return . extDef)
 
-lookupArg :: Monad m => ArgDef a -> HandlerT m (V a)
+lookupArg :: Monad m => ArgDef a -> HandlerT m (VH a)
 lookupArg (ArgDef name def argTy) = do
   args <- asks _handlerEnvArgs
   return $
     case lookup name args of
-      Nothing -> invalid [NoArgError name]
+      Nothing -> invalidF (NoArgError name)
       Just value ->
         case projectTy argTy value of
-          Nothing -> invalid [BadArgTypeError name (extTy argTy) value]
+          Nothing -> invalidF (BadArgTypeError name (extTy argTy) value)
           Just parsed -> pure parsed
 
 -- TODO actually restrict
@@ -109,16 +109,16 @@ restrictTo args = local restricted
   where
     restricted = id
 
-interpret :: Monad m => Args a -> HandlerT m (V a)
+interpret :: Monad m => Args a -> HandlerT m (VH a)
 interpret args = getCompose $ runAp (Compose . lookupArg) args
 
-makeHandler :: Monad m => Args a -> (a -> HandlerT m (V b)) -> HandlerT m (V b)
+makeHandler :: Monad m => Args a -> (a -> HandlerT m (VH b)) -> HandlerT m (VH b)
 makeHandler args makeBody =
   interpret args >>- restrictTo (argDefs args) . makeBody
 
 data FieldDecl m a = FieldDecl
   { _fieldDeclField :: G.FieldDefinition
-  , _fieldDeclHandler :: HandlerT m (V a)
+  , _fieldDeclHandler :: HandlerT m (VH a)
   }
 
 data ObjectDecl m a = ObjectDecl
@@ -129,17 +129,17 @@ data ObjectDecl m a = ObjectDecl
 objFields :: ObjectDecl m a -> [G.FieldDefinition]
 objFields (ObjectDecl _ fields) = _fieldDeclField <$> fields
 
-objHandler :: ObjectDecl m a -> HandlerT m (V a)
+objHandler :: ObjectDecl m a -> HandlerT m (VH a)
 objHandler = undefined
 
-declareFieldFn :: Monad m => G.Name -> G.Type -> Args a -> (a -> HandlerT m (V b)) -> FieldDecl m b
+declareFieldFn :: Monad m => G.Name -> G.Type -> Args a -> (a -> HandlerT m (VH b)) -> FieldDecl m b
 declareFieldFn name retTy args makeBody =
   let defs = argDefs args
       field = G.FieldDefinition name defs retTy
       handler = makeHandler args makeBody
   in FieldDecl field handler
 
-declareFieldFn0 :: Monad m => G.Name -> G.Type -> HandlerT m (V b) -> FieldDecl m b
+declareFieldFn0 :: Monad m => G.Name -> G.Type -> HandlerT m (VH b) -> FieldDecl m b
 declareFieldFn0 name retTy body = declareFieldFn name retTy (pure ()) (const body)
 
 -- declareFieldObj :: G.Name -> Args a -> (a -> ObjectDecl m b) -> FieldDecl m b

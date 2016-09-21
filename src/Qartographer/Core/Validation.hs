@@ -20,6 +20,9 @@ instance Semigroup e => Applicative (Validation e) where
 invalid :: e -> Validation e a
 invalid = Validation . Left
 
+invalidF :: Applicative f => e -> Validation (f e) a
+invalidF = Validation . Left . pure
+
 -- Validation is not quite a monad. we want to be explicit about bind.
 -- In particular, <*> != ap
 (>>-) :: Monad m => m (Validation e a) -> (a -> m (Validation e b)) -> m (Validation e b)

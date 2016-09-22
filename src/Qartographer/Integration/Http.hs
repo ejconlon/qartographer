@@ -23,5 +23,5 @@ withClient port client =
 runApplication :: Int -> Application -> Client a -> IO a
 runApplication port app client = do
   bracket (forkIO $ W.run port app) (killThread) $ \_ -> do
-    -- threadDelay 1000
+    threadDelay 10000
     withClient port client

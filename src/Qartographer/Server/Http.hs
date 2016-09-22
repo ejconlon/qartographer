@@ -10,6 +10,7 @@ import           Data.Monoid                   ((<>))
 import           Data.Text                     (Text)
 import qualified Data.Text                     as T
 import qualified Data.Text.Encoding            as TE
+import           Network.Wai                   (Middleware)
 import           Network.Wai.Middleware.Static (hasPrefix, staticPolicy)
 import           Prelude                       hiding (head)
 import           Qartographer.Core.Typing
@@ -36,15 +37,15 @@ data AppSession = AppSession
 data AppState = AppState
 
 serve :: Int -> HashMap Text Schema -> IO ()
-serve port schemas = do
-  spockCfg <- defaultSpockCfg AppSession PCNoDatabase AppState
-  runSpock port (spock spockCfg (app schemas))
+serve port = runSpock port . makeMiddleware
 
-contentTypeGraphQL :: Text
-contentTypeGraphQL = "application/graphql; charset=utf-8"
+makeMiddleware :: HashMap Text Schema -> IO Middleware
+makeMiddleware schemas = do
+ spockCfg <- defaultSpockCfg AppSession PCNoDatabase AppState
+ spock spockCfg (makeHandlers schemas)
 
-app :: HashMap Text Schema -> SpockM () AppSession AppState ()
-app schemas = do
+makeHandlers :: HashMap Text Schema -> SpockM () AppSession AppState ()
+makeHandlers schemas = do
   middleware (staticPolicy (hasPrefix "static"))
   get ("hello" <//> var) $ \name -> do
     text $ "hello " <> name
@@ -56,3 +57,6 @@ app schemas = do
           bytes $ TE.encodeUtf8 $ renderTypeDefs $ HMS.elems $ _schemaTypes schema
         get "schema" $ do
           json schema
+
+contentTypeGraphQL :: Text
+contentTypeGraphQL = "application/graphql; charset=utf-8"

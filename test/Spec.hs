@@ -4,19 +4,19 @@
 import           Qartographer.Server.Core
 
 import           Control.Monad.State
-import qualified Data.GraphQL.AST             as G
-import qualified Data.HashMap.Strict          as HMS
-import           Data.HashMap.Strict          (HashMap)
-import           Data.Text                    (Text)
-import qualified Data.Text                    as T
+import qualified Data.GraphQL.AST              as G
+import           Data.HashMap.Strict           (HashMap)
+import qualified Data.HashMap.Strict           as HMS
+import           Data.Text                     (Text)
+import qualified Data.Text                     as T
 import           Qartographer.Client.Http
 import           Qartographer.Core.Typing
 import           Qartographer.Core.Validation
 import           Qartographer.Integration.Http
 import           Qartographer.Server.Http
-import           Web.Spock
 import           Test.Tasty
 import           Test.Tasty.HUnit
+import           Web.Spock
 
 testParsing :: TestTree
 testParsing = testCase "Parsing" $ do

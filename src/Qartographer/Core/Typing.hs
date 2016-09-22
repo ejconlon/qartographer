@@ -3,14 +3,20 @@
 module Qartographer.Core.Typing where
 
 import           Control.Applicative          ((<|>))
+import           Control.Monad                (unless)
 import           Data.Aeson                   ((.=))
 import qualified Data.Aeson                   as A
 import qualified Data.Attoparsec.Text         as AT
+import           Data.Foldable                (for_, sequenceA_)
 import qualified Data.GraphQL.AST             as G
 import qualified Data.GraphQL.Encoder         as GE
 import qualified Data.GraphQL.Parser          as GP
 import           Data.HashMap.Strict          (HashMap)
 import qualified Data.HashMap.Strict          as HMS
+import           Data.Maybe                   (maybeToList)
+import           Data.Monoid                  ((<>))
+import           Data.Set                     (Set)
+import qualified Data.Set                     as S
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
 import           Qartographer.Core.Validation
@@ -93,8 +99,25 @@ lookupDef name tmap =
         Nothing  -> invalidF (TypeNotFound name)
         Just def -> pure (UserDef def)
 
-isValidSchema :: Schema -> VR ()
-isValidSchema = undefined
+namesInTypeDef :: G.TypeDefinition -> Set Text
+namesInTypeDef = undefined
+
+namesInSchema :: Schema -> Set Text
+namesInSchema (Schema qtn mtn stn types) =
+  let start = S.fromList (qtn : maybeToList mtn ++ maybeToList stn)
+  in foldl (<>) start (namesInTypeDef <$> HMS.elems types)
+
+validateSchemaNames :: Schema -> VR ()
+validateSchemaNames schema@(Schema _ _ _ types) =
+  let names = namesInSchema schema
+  in for_ names $ \name ->
+    unless (HMS.member name types) (invalidF (TypeNotFound name))
+
+validateSchema :: Schema -> VR ()
+validateSchema schema =
+  sequenceA_
+    [ validateSchemaNames schema
+    ]
 
 isServableSchema :: Schema -> VR ()
 isServableSchema = undefined

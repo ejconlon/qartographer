@@ -17,7 +17,7 @@ instance Semigroup e => Applicative (Validation e) where
       z (Right _) (Left e2) = Left e2
       z (Right f) (Right a) = Right (f a)
 
--- Not really a monad, since fails <*> == ap
+-- Not really a monad, since <*> != ap
 -- instance Semigroup e => Monad (Validation e) where
 --   return = pure
 --   (Validation (Left es)) >>= _ = (Validation (Left es))

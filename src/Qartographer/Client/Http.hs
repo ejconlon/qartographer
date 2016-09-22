@@ -1,21 +1,21 @@
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 module Qartographer.Client.Http where
 
-import qualified Data.ByteString.Lazy as BL
-import Data.ByteString.Lazy (ByteString)
-import Control.Monad.IO.Class
-import Control.Monad.Reader
-import Network.HTTP.Client
-import Network.Wreq (defaults)
-import Network.Wreq.Session
-import Network.Wreq.Types (Options(..), Postable(..))
-import System.FilePath.Posix ((</>))
+import           Control.Monad.IO.Class
+import           Control.Monad.Reader
+import           Data.ByteString.Lazy   (ByteString)
+import qualified Data.ByteString.Lazy   as BL
+import           Network.HTTP.Client
+import           Network.Wreq           (defaults)
+import           Network.Wreq.Session
+import           Network.Wreq.Types     (Options (..), Postable (..))
+import           System.FilePath.Posix  ((</>))
 
 data ClientEnv = ClientEnv
   { _clientEnvHostPort :: String
-  , _clientEnvSession :: Session
+  , _clientEnvSession  :: Session
   } deriving (Show)
 
 localClient :: Int -> Session -> ClientEnv

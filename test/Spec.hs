@@ -4,9 +4,9 @@
 import           Qartographer.Server.Core
 
 import           Control.Monad.State
-import qualified Data.GraphQL.AST         as G
-import           Data.Text                (Text)
-import qualified Data.Text                as T
+import qualified Data.GraphQL.AST             as G
+import           Data.Text                    (Text)
+import qualified Data.Text                    as T
 import           Qartographer.Core.Typing
 import           Qartographer.Core.Validation
 import           Test.Tasty

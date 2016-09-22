@@ -3,16 +3,16 @@
 module Qartographer.Core.Typing where
 
 import           Control.Applicative          ((<|>))
-import qualified Data.Aeson                   as A
 import           Data.Aeson                   ((.=))
+import qualified Data.Aeson                   as A
 import qualified Data.Attoparsec.Text         as AT
 import qualified Data.GraphQL.AST             as G
 import qualified Data.GraphQL.Encoder         as GE
 import qualified Data.GraphQL.Parser          as GP
 import           Data.HashMap.Strict          (HashMap)
 import qualified Data.HashMap.Strict          as HMS
-import qualified Data.Text                    as T
 import           Data.Text                    (Text)
+import qualified Data.Text                    as T
 import           Qartographer.Core.Validation
 
 data Reason =
@@ -23,7 +23,7 @@ data Reason =
 type VR a = Validation [Reason] a
 
 fromParseResult :: Either String a -> VR a
-fromParseResult (Left e) = invalidF $ ParserError $ T.pack e
+fromParseResult (Left e)  = invalidF $ ParserError $ T.pack e
 fromParseResult (Right a) = pure a
 
 type TypeMap = HashMap Text G.TypeDefinition

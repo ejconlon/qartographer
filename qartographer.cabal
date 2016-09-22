@@ -25,7 +25,9 @@ library
   build-depends:       base >= 4.9 && < 5
                      , aeson
                      , attoparsec
+                     , bytestring
                      , exceptions
+                     , filepath
                      , free
                      , graphql
                      , http-client

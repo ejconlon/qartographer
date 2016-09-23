@@ -101,9 +101,8 @@ testParsing = testCase "Parsing" $ do
 
 testValidation :: TestTree
 testValidation = testCase "Validation" $ do
-  let a0 = runValidation $ parseTypeDefs example
-      (Right defs) = a0
-      tymap = makeTypeMap defs
+  let (Right defs) = runValidation $ parseTypeDefs example
+      (Right tymap) = runValidation $ makeTypeMap defs
   HS.fromList (HMS.keys tymap) @?= expectedTopLevelNames
   let schema = Schema "QueryRoot" Nothing Nothing tymap
       a1 = runValidation $ validateSchema schema

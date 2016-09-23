@@ -13,7 +13,7 @@ import qualified Data.GraphQL.Encoder         as GE
 import qualified Data.GraphQL.Parser          as GP
 import           Data.HashMap.Strict          (HashMap)
 import qualified Data.HashMap.Strict          as HMS
-import Data.List (foldl')
+import Data.List (foldl', group, sort)
 import           Data.Maybe                   (maybeToList)
 import           Data.Monoid                  ((<>))
 import           Data.HashSet                     (HashSet)
@@ -24,6 +24,7 @@ import           Qartographer.Core.Validation
 
 data Reason =
     TypeNotFound Text
+  | DuplicateTypeDef Text
   | ParserError Text
   deriving (Show, Eq)
 
@@ -69,12 +70,24 @@ typeNameOf (G.TypeDefinitionScalar (G.ScalarTypeDefinition name)) = Just name
 typeNameOf (G.TypeDefinitionEnum (G.EnumTypeDefinition name _)) = Just name
 typeNameOf _ = Nothing
 
-makeTypeMap :: [G.TypeDefinition] -> TypeMap
-makeTypeMap defs = HMS.fromList $ do
-  def <- defs
-  case typeNameOf def of
-    Nothing -> []
-    Just name -> [(name, def)]
+filterByLength :: Ord a => (Int -> Bool) -> [a] -> [[a]]
+filterByLength p = filter (p . length) . group . sort
+
+repeated :: Ord a => [a] -> [a]
+repeated = map head . filterByLength (>1) 
+
+makeTypeMap :: [G.TypeDefinition] -> VR TypeMap
+makeTypeMap defs =
+  let pairs = do
+        def <- defs
+        case typeNameOf def of
+          Nothing -> []
+          Just name -> [(name, def)]
+      dupes = repeated (fst <$> pairs)
+      tymap = HMS.fromList pairs
+  in if (null dupes)
+    then pure tymap
+    else invalid (DuplicateTypeDef <$> dupes)
 
 data Qdoc =
     OpQdoc G.OperationDefinition

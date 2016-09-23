@@ -2,6 +2,7 @@
 
 module Qartographer.Core.Validation where
 
+import Data.Either (isRight)
 import           Data.Semigroup (Semigroup (..))
 
 newtype Validation e a = Validation {
@@ -28,6 +29,9 @@ invalid = Validation . Left
 
 invalidF :: Applicative f => e -> Validation (f e) a
 invalidF = Validation . Left . pure
+
+isValid :: Validation e a -> Bool
+isValid (Validation e) = isRight e
 
 -- Validation is not quite a monad. we want to be explicit about bind.
 -- In particular, <*> != ap

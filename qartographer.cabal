@@ -26,7 +26,6 @@ library
                      , aeson
                      , attoparsec
                      , bytestring
-                     , containers
                      , exceptions
                      , filepath
                      , free
@@ -59,6 +58,7 @@ test-suite qartographer-test
   main-is:             Spec.hs
   build-depends:       base
                      , graphql
+                     , heredoc
                      , mtl
                      , qartographer
                      , Spock

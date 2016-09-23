@@ -13,10 +13,11 @@ import qualified Data.GraphQL.Encoder         as GE
 import qualified Data.GraphQL.Parser          as GP
 import           Data.HashMap.Strict          (HashMap)
 import qualified Data.HashMap.Strict          as HMS
+import Data.List (foldl')
 import           Data.Maybe                   (maybeToList)
 import           Data.Monoid                  ((<>))
-import           Data.Set                     (Set)
-import qualified Data.Set                     as S
+import           Data.HashSet                     (HashSet)
+import qualified Data.HashSet                     as HS
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
 import           Qartographer.Core.Validation
@@ -59,6 +60,22 @@ parseTypeDefs = fromParseResult . AT.parseOnly (parser <* AT.endOfInput)
 renderTypeDefs :: [G.TypeDefinition] -> Text
 renderTypeDefs defs = GE.document (G.Document (G.DefinitionType <$> defs))
 
+-- TODO
+typeNameOf :: G.TypeDefinition -> Maybe Text
+typeNameOf (G.TypeDefinitionObject (G.ObjectTypeDefinition name _ _)) = Just name
+typeNameOf (G.TypeDefinitionInterface (G.InterfaceTypeDefinition name _)) = Just name
+typeNameOf (G.TypeDefinitionUnion (G.UnionTypeDefinition name _)) = Just name
+typeNameOf (G.TypeDefinitionScalar (G.ScalarTypeDefinition name)) = Just name
+typeNameOf (G.TypeDefinitionEnum (G.EnumTypeDefinition name _)) = Just name
+typeNameOf _ = Nothing
+
+makeTypeMap :: [G.TypeDefinition] -> TypeMap
+makeTypeMap defs = HMS.fromList $ do
+  def <- defs
+  case typeNameOf def of
+    Nothing -> []
+    Just name -> [(name, def)]
+
 data Qdoc =
     OpQdoc G.OperationDefinition
   | FragQdoc G.FragmentDefinition
@@ -92,35 +109,87 @@ lookupDef name tmap =
   case name of
     "Int" -> pure (PrimDef IntPrim)
     "Float" -> pure (PrimDef FloatPrim)
-    "Bool" -> pure (PrimDef BoolPrim)
+    "Boolean" -> pure (PrimDef BoolPrim)
     "String" -> pure (PrimDef StringPrim)
     _ ->
       case HMS.lookup name tmap of
         Nothing  -> invalidF (TypeNotFound name)
         Just def -> pure (UserDef def)
 
-namesInTypeDef :: G.TypeDefinition -> Set Text
-namesInTypeDef = undefined
+namesInType :: G.Type -> HashSet Text
+namesInType (G.TypeNamed named) = namesInNamedDef named
+namesInType (G.TypeList (G.ListType ty)) = namesInType ty
+namesInType (G.TypeNonNull (G.NonNullTypeNamed named)) = namesInNamedDef named
+namesInType (G.TypeNonNull (G.NonNullTypeList (G.ListType ty))) = namesInType ty
 
-namesInSchema :: Schema -> Set Text
+namesInFieldDef :: G.FieldDefinition -> HashSet Text
+namesInFieldDef (G.FieldDefinition _ args ty) =
+  mconcat (namesInInputValueDef <$> args) <>
+    namesInType ty
+
+namesInNamedDef :: G.NamedType -> HashSet Text
+namesInNamedDef (G.NamedType name) = HS.singleton name
+
+namesInObjectDef :: G.ObjectTypeDefinition -> HashSet Text
+namesInObjectDef (G.ObjectTypeDefinition name interfaces fields) =
+  HS.singleton name <>
+    mconcat (namesInNamedDef <$> interfaces) <>
+    mconcat (namesInFieldDef <$> fields)
+
+namesInInterfaceDef :: G.InterfaceTypeDefinition -> HashSet Text
+namesInInterfaceDef (G.InterfaceTypeDefinition name fields) =
+  HS.singleton name <>
+    mconcat (namesInFieldDef <$> fields)
+
+namesInUnionDef :: G.UnionTypeDefinition -> HashSet Text
+namesInUnionDef (G.UnionTypeDefinition name variants) =
+  HS.singleton name <>
+    mconcat (namesInNamedDef <$> variants)
+
+namesInScalarDef :: G.ScalarTypeDefinition -> HashSet Text
+namesInScalarDef (G.ScalarTypeDefinition name) =
+  HS.singleton name
+
+namesInEnumDef :: G.EnumTypeDefinition -> HashSet Text
+namesInEnumDef (G.EnumTypeDefinition name _) =
+  HS.singleton name
+  -- TODO are enum values effectively singleton types?
+
+namesInInputValueDef :: G.InputValueDefinition -> HashSet Text
+namesInInputValueDef (G.InputValueDefinition _ ty _) =
+  namesInType ty
+
+namesInInputObjectDef :: G.InputObjectTypeDefinition -> HashSet Text
+namesInInputObjectDef (G.InputObjectTypeDefinition _ ivdefs) =
+  mconcat (namesInInputValueDef <$> ivdefs)
+
+namesInTypeExtension :: G.TypeExtensionDefinition -> HashSet Text
+namesInTypeExtension (G.TypeExtensionDefinition obj) =
+  namesInObjectDef obj
+
+namesInTypeDef :: G.TypeDefinition -> HashSet Text
+namesInTypeDef (G.TypeDefinitionObject x) = namesInObjectDef x
+namesInTypeDef (G.TypeDefinitionInterface x) = namesInInterfaceDef x
+namesInTypeDef (G.TypeDefinitionUnion x) = namesInUnionDef x
+namesInTypeDef (G.TypeDefinitionScalar x) = namesInScalarDef x
+namesInTypeDef (G.TypeDefinitionEnum x) = namesInEnumDef x
+namesInTypeDef (G.TypeDefinitionInputObject x) = namesInInputObjectDef x
+namesInTypeDef (G.TypeDefinitionTypeExtension x) = namesInTypeExtension x
+
+namesInSchema :: Schema -> HashSet Text
 namesInSchema (Schema qtn mtn stn types) =
-  let start = S.fromList (qtn : maybeToList mtn ++ maybeToList stn)
+  let start = HS.fromList (qtn : maybeToList mtn ++ maybeToList stn)
   in foldl (<>) start (namesInTypeDef <$> HMS.elems types)
 
 validateSchemaNames :: Schema -> VR ()
 validateSchemaNames schema@(Schema _ _ _ types) =
-  let names = namesInSchema schema
-  in for_ names $ \name ->
-    unless (HMS.member name types) (invalidF (TypeNotFound name))
+  for_ (namesInSchema schema) (flip lookupDef types)
 
 validateSchema :: Schema -> VR ()
 validateSchema schema =
   sequenceA_
     [ validateSchemaNames schema
     ]
-
-isServableSchema :: Schema -> VR ()
-isServableSchema = undefined
 
 isValidQuery :: G.Document -> VR ()
 isValidQuery = undefined
